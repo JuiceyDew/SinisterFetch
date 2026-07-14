@@ -413,7 +413,7 @@ static void logoLineCacheBuild(FFLogoLineCacheState* cache, const char* data, bo
                 cell.color[0] = '\0';
                 cell.width = 1;
 
-                if (sx_float >= -1.0 && sx_float < (double)instance.state.logoGridWidth + 1.0 &&
+                if (sx_float >= -2.0 && sx_float < (double)instance.state.logoGridWidth + 2.0 &&
                     sy_float >= -1.0 && sy_float < (double)instance.state.logoGridHeight + 1.0) {
                     
                     int x0 = (int)floor(sx_float);
@@ -426,7 +426,7 @@ static void logoLineCacheBuild(FFLogoLineCacheState* cache, const char* data, bo
                     double best_dist_sq = 1e9;
                     
                     for (int ny = y0; ny <= y0 + 1; ny++) {
-                        for (int nx = x0; nx <= x0 + 1; nx++) {
+                        for (int nx = x0 - 1; nx <= x0 + 2; nx++) {
                             if (nx >= 0 && nx < (int)instance.state.logoGridWidth && ny >= 0 && ny < (int)instance.state.logoGridHeight) {
                                 LogoCell candidate = instance.state.logoGrid[ny * instance.state.logoGridWidth + nx];
                                 if (candidate.width > 0 && strcmp(candidate.ch, " ") != 0 && candidate.ch[0] != '\0') {
@@ -442,7 +442,7 @@ static void logoLineCacheBuild(FFLogoLineCacheState* cache, const char* data, bo
                         }
                     }
                     
-                    if (best_dist_sq <= 1.56) {
+                    if (best_dist_sq <= 1.6) {
                         cell = best_cell;
                     } else {
                         int sx = (int)round(sx_float);
