@@ -345,6 +345,26 @@ static void logoLineCacheBuild(FFLogoLineCacheState* cache, const char* data, bo
                 instance.state.logoGrid = malloc(gridW * gridH * sizeof(LogoCell));
                 populateLogoGrid(data, doColorReplacement, instance.state.logoGrid, gridW, gridH);
                 instance.state.logoSpinAngle = 0.0;
+
+                double cx_orig = (gridW - 1) / 2.0;
+                double cy_orig = (gridH - 1) / 2.0;
+                instance.state.cx_orig = cx_orig;
+                instance.state.cy_orig = cy_orig;
+
+                double max_dist = 0;
+                for (uint32_t y = 0; y < gridH; y++) {
+                    for (uint32_t x = 0; x < gridW; x++) {
+                        LogoCell* cell = &instance.state.logoGrid[y * gridW + x];
+                        if (strcmp(cell->ch, " ") != 0 && cell->ch[0] != '\0') {
+                            double dx = x - cx_orig;
+                            double dy = (y - cy_orig) * 2.0;
+                            double dist = sqrt(dx*dx + dy*dy);
+                            if (dist > max_dist) max_dist = dist;
+                        }
+                    }
+                }
+                instance.state.rotLineWidth = (uint32_t)(2 * ceil(max_dist) + 3);
+                instance.state.rotLineHeight = (uint32_t)(2 * ceil(max_dist / 2.0) + 2);
             }
         }
     }
@@ -352,23 +372,11 @@ static void logoLineCacheBuild(FFLogoLineCacheState* cache, const char* data, bo
     if (instance.state.logoGrid) {
         logoLineCacheClear(cache);
         
-        double max_dist = 0;
-        double cx_orig = (instance.state.logoGridWidth - 1) / 2.0;
-        double cy_orig = (instance.state.logoGridHeight - 1) / 2.0;
-        for (uint32_t y = 0; y < instance.state.logoGridHeight; y++) {
-            for (uint32_t x = 0; x < instance.state.logoGridWidth; x++) {
-                LogoCell* cell = &instance.state.logoGrid[y * instance.state.logoGridWidth + x];
-                if (strcmp(cell->ch, " ") != 0 && cell->ch[0] != '\0') {
-                    double dx = x - cx_orig;
-                    double dy = (y - cy_orig) * 2.0;
-                    double dist = sqrt(dx*dx + dy*dy);
-                    if (dist > max_dist) max_dist = dist;
-                }
-            }
-        }
+        uint32_t maxLineWidth = instance.state.rotLineWidth;
+        uint32_t parsedHeight = instance.state.rotLineHeight;
         
-        uint32_t maxLineWidth = (uint32_t)(2 * ceil(max_dist) + 3);
-        uint32_t parsedHeight = (uint32_t)(2 * ceil(max_dist / 2.0) + 2);
+        double cx_orig = instance.state.cx_orig;
+        double cy_orig = instance.state.cy_orig;
         
         double cx_target = (maxLineWidth - 1) / 2.0;
         double cy_target = (parsedHeight - 1) / 2.0;
@@ -400,44 +408,48 @@ static void logoLineCacheBuild(FFLogoLineCacheState* cache, const char* data, bo
                 double sx_float = cx_orig + dx_src;
                 double sy_float = cy_orig + dy_src;
                 
-                int x0 = (int)floor(sx_float);
-                int y0 = (int)floor(sy_float);
-                
-                LogoCell best_cell;
-                strcpy(best_cell.ch, " ");
-                best_cell.color[0] = '\0';
-                best_cell.width = 1;
-                double best_dist_sq = 1e9;
-                
-                for (int ny = y0; ny <= y0 + 1; ny++) {
-                    for (int nx = x0; nx <= x0 + 1; nx++) {
-                        if (nx >= 0 && nx < (int)instance.state.logoGridWidth && ny >= 0 && ny < (int)instance.state.logoGridHeight) {
-                            LogoCell cell = instance.state.logoGrid[ny * instance.state.logoGridWidth + nx];
-                            if (cell.width > 0 && strcmp(cell.ch, " ") != 0 && cell.ch[0] != '\0') {
-                                double dx_diff = nx - sx_float;
-                                double dy_diff = (ny - sy_float) * 2.0;
-                                double dist_sq = dx_diff * dx_diff + dy_diff * dy_diff;
-                                if (dist_sq < best_dist_sq) {
-                                    best_dist_sq = dist_sq;
-                                    best_cell = cell;
+                LogoCell cell;
+                strcpy(cell.ch, " ");
+                cell.color[0] = '\0';
+                cell.width = 1;
+
+                if (sx_float >= -1.0 && sx_float < (double)instance.state.logoGridWidth + 1.0 &&
+                    sy_float >= -1.0 && sy_float < (double)instance.state.logoGridHeight + 1.0) {
+                    
+                    int x0 = (int)floor(sx_float);
+                    int y0 = (int)floor(sy_float);
+                    
+                    LogoCell best_cell;
+                    strcpy(best_cell.ch, " ");
+                    best_cell.color[0] = '\0';
+                    best_cell.width = 1;
+                    double best_dist_sq = 1e9;
+                    
+                    for (int ny = y0; ny <= y0 + 1; ny++) {
+                        for (int nx = x0; nx <= x0 + 1; nx++) {
+                            if (nx >= 0 && nx < (int)instance.state.logoGridWidth && ny >= 0 && ny < (int)instance.state.logoGridHeight) {
+                                LogoCell candidate = instance.state.logoGrid[ny * instance.state.logoGridWidth + nx];
+                                if (candidate.width > 0 && strcmp(candidate.ch, " ") != 0 && candidate.ch[0] != '\0') {
+                                    double dx_diff = nx - sx_float;
+                                    double dy_diff = (ny - sy_float) * 2.0;
+                                    double dist_sq = dx_diff * dx_diff + dy_diff * dy_diff;
+                                    if (dist_sq < best_dist_sq) {
+                                        best_dist_sq = dist_sq;
+                                        best_cell = candidate;
+                                    }
                                 }
                             }
                         }
                     }
-                }
-                
-                LogoCell cell;
-                if (best_dist_sq <= 1.56) {
-                    cell = best_cell;
-                } else {
-                    int sx = (int)round(sx_float);
-                    int sy = (int)round(sy_float);
-                    if (sx >= 0 && sx < (int)instance.state.logoGridWidth && sy >= 0 && sy < (int)instance.state.logoGridHeight) {
-                        cell = instance.state.logoGrid[sy * instance.state.logoGridWidth + sx];
+                    
+                    if (best_dist_sq <= 1.56) {
+                        cell = best_cell;
                     } else {
-                        strcpy(cell.ch, " ");
-                        cell.color[0] = '\0';
-                        cell.width = 1;
+                        int sx = (int)round(sx_float);
+                        int sy = (int)round(sy_float);
+                        if (sx >= 0 && sx < (int)instance.state.logoGridWidth && sy >= 0 && sy < (int)instance.state.logoGridHeight) {
+                            cell = instance.state.logoGrid[sy * instance.state.logoGridWidth + sx];
+                        }
                     }
                 }
                 

@@ -46,6 +46,10 @@ typedef struct FFstate {
     uint32_t logoGridWidth;
     uint32_t logoGridHeight;
     double logoSpinAngle;
+    double cx_orig;
+    double cy_orig;
+    uint32_t rotLineWidth;
+    uint32_t rotLineHeight;
 } FFstate;
 
 typedef struct FFinstance {

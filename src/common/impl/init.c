@@ -36,6 +36,10 @@ static void initState(FFstate* state) {
     state->logoGridWidth = 0;
     state->logoGridHeight = 0;
     state->logoSpinAngle = 0.0;
+    state->cx_orig = 0.0;
+    state->cy_orig = 0.0;
+    state->rotLineWidth = 0;
+    state->rotLineHeight = 0;
 
     #if !FF_MODULE_DISABLE_TERMINALTHEME
     {
