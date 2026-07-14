@@ -31,6 +31,30 @@ There are [screenshots on different platforms](https://github.com/fastfetch-cli/
 
 ## Installation
 
+### Nix / NixOS (Flakes)
+
+You can run or install this custom fork (`sinisterfetch` with 2D logo rotation) directly using Nix Flakes:
+
+* **Run ephemerally** (without installing):
+  ```bash
+  nix run github:JuiceyDew/SinisterFetch
+  ```
+* **Install to user profile**:
+  ```bash
+  nix profile install github:JuiceyDew/SinisterFetch
+  ```
+* **Add to NixOS configuration**:
+  Add to your inputs in your `flake.nix`:
+  ```nix
+  inputs.sinisterfetch.url = "github:JuiceyDew/SinisterFetch";
+  ```
+  And add the package to `environment.systemPackages`:
+  ```nix
+  environment.systemPackages = [
+    inputs.sinisterfetch.packages.${pkgs.system}.sinisterfetch
+  ];
+  ```
+
 ### Linux
 
 Some distributions package outdated versions of fastfetch. Older versions receive no support, so please always try to use the latest version.
