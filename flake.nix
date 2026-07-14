@@ -27,6 +27,11 @@
               rm -f $out/bin/flashfetch
             fi
           '';
+
+          # Correct the default executable name for 'nix run'
+          meta = (oldAttrs.meta or {}) // {
+            mainProgram = "sinisterfetch";
+          };
         });
 
         packages.sinisterfetch = self.packages.${system}.default;
