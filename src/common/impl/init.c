@@ -122,7 +122,7 @@ static void exitSignalHandler([[maybe_unused]] int signal) {
 
 void ffStart(void) {
     ffDisableLinewrap = instance.config.display.disableLinewrap && !instance.config.display.pipe;
-    ffHideCursor = instance.config.display.hideCursor && !instance.config.display.pipe;
+    ffHideCursor = (instance.config.display.hideCursor || instance.config.logo.spin) && !instance.config.display.pipe;
 
 #ifdef _WIN32
     SetErrorMode(SEM_FAILCRITICALERRORS);
@@ -164,6 +164,7 @@ void ffStart(void) {
 
     if (instance.state.dynamicInterval > 0) {
         fputs("\033[?1049h\033[H", stdout); // Enable alternate buffer
+        setvbuf(stdout, nullptr, _IOFBF, 65536); // Enable full buffering for smooth rendering
         fflush(stdout);
     }
 }
