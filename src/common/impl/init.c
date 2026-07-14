@@ -32,6 +32,10 @@ static void initState(FFstate* state) {
 
     ffPlatformInit(&state->platform);
     state->dynamicInterval = 0;
+    state->logoGrid = NULL;
+    state->logoGridWidth = 0;
+    state->logoGridHeight = 0;
+    state->logoSpinAngle = 0.0;
 
     #if !FF_MODULE_DISABLE_TERMINALTHEME
     {
@@ -176,6 +180,9 @@ static void destroyConfig(void) {
 
 static void destroyState(void) {
     ffPlatformDestroy(&instance.state.platform);
+    if (instance.state.logoGrid) {
+        free(instance.state.logoGrid);
+    }
 }
 
 void ffDestroyInstance(void) {

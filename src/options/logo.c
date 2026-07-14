@@ -19,6 +19,7 @@ void ffOptionsInitLogo(FFOptionsLogo* options) {
     options->preserveAspectRatio = false;
     options->recache = false;
     options->position = FF_LOGO_POSITION_LEFT;
+    options->spin = true;
 
 #if FF_HAVE_CHAFA
     options->chafaFgOnly = false;
@@ -107,6 +108,8 @@ bool ffOptionsParseLogoCommandLine(FFOptionsLogo* options, const char* key, cons
             options->preserveAspectRatio = ffOptionParseBoolean(value);
         } else if (ffStrEqualsIgnCase(subKey, "recache")) {
             options->recache = ffOptionParseBoolean(value);
+        } else if (ffStrEqualsIgnCase(subKey, "spin")) {
+            options->spin = ffOptionParseBoolean(value);
         } else if (ffStrEqualsIgnCase(subKey, "separate")) {
             fputs("--logo-separate has been renamed to --logo-position\n", stderr);
             exit(477);
@@ -338,6 +341,9 @@ const char* ffOptionsParseLogoJsonConfig(FFOptionsLogo* options, yyjson_val* roo
         } else if (unsafe_yyjson_equals_str(key, "recache")) {
             options->recache = yyjson_get_bool(val);
             continue;
+        } else if (unsafe_yyjson_equals_str(key, "spin")) {
+            options->spin = yyjson_get_bool(val);
+            continue;
         } else if (unsafe_yyjson_equals_str(key, "position")) {
             int value;
             const char* error = ffJsonConfigParseEnum(val, &value, (FFKeyValuePair[]) {
@@ -522,6 +528,7 @@ void ffOptionsGenerateLogoJsonConfig(FFdata* data, FFOptionsLogo* options) {
     yyjson_mut_obj_add_bool(doc, obj, "preserveAspectRatio", options->preserveAspectRatio);
 
     yyjson_mut_obj_add_bool(doc, obj, "recache", options->recache);
+    yyjson_mut_obj_add_bool(doc, obj, "spin", options->spin);
 
     yyjson_mut_obj_add_str(doc, obj, "position", ((const char*[]) {
                                                      "left",

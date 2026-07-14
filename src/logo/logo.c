@@ -11,11 +11,173 @@
 #include <ctype.h>
 #include <stdlib.h>
 #include <string.h>
+#include <math.h>
+#include <unistd.h>
+
+#ifndef M_PI
+#define M_PI 3.14159265358979323846
+#endif
 
 typedef struct FFLogoCachedLine {
     FFstrbuf chars;
     uint32_t width;
 } FFLogoCachedLine;
+
+static void logoLineCacheBuild(FFLogoLineCacheState* cache, const char* data, bool doColorReplacement);
+
+static void getLogoDimensions(const char* data, bool doColorReplacement, uint32_t* outWidth, uint32_t* outHeight) {
+    uint32_t maxW = 0;
+    uint32_t h = 0;
+    uint32_t w = 0;
+    const char* ptr = data;
+    while (*ptr != '\0') {
+        if (*ptr == '\n' || (*ptr == '\r' && *(ptr + 1) == '\n')) {
+            if (w > maxW) maxW = w;
+            w = 0;
+            h++;
+            if (*ptr == '\r') ptr++;
+            ptr++;
+            continue;
+        }
+        if (*ptr == '\t') {
+            w += 4;
+            ptr++;
+            continue;
+        }
+        if (*ptr == '\e' && *(ptr + 1) == '[') {
+            ptr += 2;
+            while (ffCharIsDigit(*ptr) || *ptr == ';') ptr++;
+            if (isascii(*ptr)) ptr++;
+            continue;
+        }
+        if (doColorReplacement && *ptr == '$') {
+            ptr++;
+            if (*ptr == '$' || *ptr == '\0') {
+                w++;
+                if (*ptr != '\0') ptr++;
+                continue;
+            }
+            int index = *ptr - '1';
+            if (index >= 0 && index < FASTFETCH_LOGO_MAX_COLORS) {
+                ptr++;
+                continue;
+            }
+            w++;
+            continue;
+        }
+        uint8_t charWidth;
+        uint8_t bytes = ffUtf8CharLenWidth(ptr, UINT32_MAX, &charWidth);
+        w += charWidth;
+        ptr += bytes;
+    }
+    if (w > maxW) maxW = w;
+    if (w > 0) h++;
+    *outWidth = maxW;
+    *outHeight = h;
+}
+
+static void populateLogoGrid(const char* data, bool doColorReplacement, LogoCell* grid, uint32_t width, uint32_t height) {
+    for (uint32_t y = 0; y < height; y++) {
+        for (uint32_t x = 0; x < width; x++) {
+            LogoCell* cell = &grid[y * width + x];
+            strcpy(cell->ch, " ");
+            cell->color[0] = '\0';
+            cell->width = 1;
+        }
+    }
+
+    FFOptionsLogo* options = &instance.config.logo;
+    char curColor[64] = "";
+    if (doColorReplacement && !instance.config.display.pipe) {
+        snprintf(curColor, sizeof(curColor), "\e[%sm", options->colors[0].chars);
+    }
+
+    uint32_t x = 0;
+    uint32_t y = 0;
+    const char* ptr = data;
+    while (*ptr != '\0' && y < height) {
+        if (*ptr == '\n' || (*ptr == '\r' && *(ptr + 1) == '\n')) {
+            x = 0;
+            y++;
+            if (*ptr == '\r') ptr++;
+            ptr++;
+            continue;
+        }
+        if (*ptr == '\t') {
+            for (int i = 0; i < 4 && x < width; i++) {
+                LogoCell* cell = &grid[y * width + x];
+                strcpy(cell->ch, " ");
+                strcpy(cell->color, curColor);
+                cell->width = 1;
+                x++;
+            }
+            ptr++;
+            continue;
+        }
+        if (*ptr == '\e' && *(ptr + 1) == '[') {
+            const char* start = ptr;
+            ptr += 2;
+            while (ffCharIsDigit(*ptr) || *ptr == ';') ptr++;
+            if (isascii(*ptr)) ptr++;
+            size_t len = ptr - start;
+            if (len < sizeof(curColor)) {
+                memcpy(curColor, start, len);
+                curColor[len] = '\0';
+            }
+            continue;
+        }
+        if (doColorReplacement && *ptr == '$') {
+            ptr++;
+            if (*ptr == '$' || *ptr == '\0') {
+                if (x < width) {
+                    LogoCell* cell = &grid[y * width + x];
+                    strcpy(cell->ch, "$");
+                    strcpy(cell->color, curColor);
+                    cell->width = 1;
+                    x++;
+                }
+                if (*ptr != '\0') ptr++;
+                continue;
+            }
+            int index = *ptr - '1';
+            if (index >= 0 && index < FASTFETCH_LOGO_MAX_COLORS) {
+                snprintf(curColor, sizeof(curColor), "\e[%sm", options->colors[index].chars);
+                ptr++;
+                continue;
+            }
+            if (x < width) {
+                LogoCell* cell = &grid[y * width + x];
+                strcpy(cell->ch, "$");
+                strcpy(cell->color, curColor);
+                cell->width = 1;
+                x++;
+            }
+            continue;
+        }
+        uint8_t charWidth;
+        uint8_t bytes = ffUtf8CharLenWidth(ptr, UINT32_MAX, &charWidth);
+        if (x < width) {
+            LogoCell* cell = &grid[y * width + x];
+            if (bytes < 5) {
+                memcpy(cell->ch, ptr, bytes);
+                cell->ch[bytes] = '\0';
+            } else {
+                strcpy(cell->ch, " ");
+            }
+            strcpy(cell->color, curColor);
+            cell->width = charWidth;
+            
+            for (uint32_t w = 1; w < charWidth && (x + w) < width; w++) {
+                LogoCell* nextCell = &grid[y * width + (x + w)];
+                nextCell->ch[0] = '\0';
+                nextCell->color[0] = '\0';
+                nextCell->width = 0;
+            }
+            x += charWidth;
+        }
+        ptr += bytes;
+    }
+}
 
 static void logoLineCacheClear(FFLogoLineCacheState* cache) {
     FF_LIST_FOR_EACH (FFLogoCachedLine, line, cache->lines) {
@@ -39,8 +201,130 @@ static void logoLineCachePush(const FFstrbuf* chars, uint32_t width, FFLogoLineC
     line->width = width;
 }
 
+void ffLogoUpdateSpin(void) {
+    if (instance.state.logoGrid) {
+        instance.state.logoSpinAngle += 0.08;
+        logoLineCacheBuild(&instance.state.logoLineCache, NULL, false);
+    }
+}
+
 static void logoLineCacheBuild(FFLogoLineCacheState* cache, const char* data, bool doColorReplacement) {
     FFOptionsLogo* options = &instance.config.logo;
+
+    if (options->spin && !instance.config.display.pipe && isatty(STDOUT_FILENO)) {
+        if (!instance.state.logoGrid && data && *data != '\0') {
+            uint32_t gridW = 0, gridH = 0;
+            getLogoDimensions(data, doColorReplacement, &gridW, &gridH);
+            if (gridW > 0 && gridH > 0) {
+                instance.state.logoGridWidth = gridW;
+                instance.state.logoGridHeight = gridH;
+                instance.state.logoGrid = malloc(gridW * gridH * sizeof(LogoCell));
+                populateLogoGrid(data, doColorReplacement, instance.state.logoGrid, gridW, gridH);
+                instance.state.logoSpinAngle = 0.0;
+            }
+        }
+    }
+
+    if (instance.state.logoGrid) {
+        logoLineCacheClear(cache);
+        uint32_t maxLineWidth = instance.state.logoGridWidth;
+        uint32_t parsedHeight = instance.state.logoGridHeight;
+        LogoCell* rotatedLine = malloc(maxLineWidth * sizeof(LogoCell));
+        double cx = (maxLineWidth - 1) / 2.0;
+        double alpha = instance.state.logoSpinAngle;
+
+        for (uint32_t i = 0; i < options->paddingTop; ++i) {
+            logoLineCachePush(nullptr, 0, cache);
+        }
+
+        for (uint32_t y = 0; y < parsedHeight; y++) {
+            for (uint32_t x = 0; x < maxLineWidth; x++) {
+                strcpy(rotatedLine[x].ch, " ");
+                rotatedLine[x].color[0] = '\0';
+                rotatedLine[x].width = 1;
+            }
+
+            double* zBuffer = malloc(maxLineWidth * sizeof(double));
+            for (uint32_t x = 0; x < maxLineWidth; x++) {
+                zBuffer[x] = -1e9;
+            }
+
+            for (uint32_t x = 0; x < maxLineWidth; x++) {
+                LogoCell* orig = &instance.state.logoGrid[y * maxLineWidth + x];
+                if (orig->width == 0) continue;
+
+                double dx = x - cx;
+                double theta = (cx > 0) ? (dx / cx) * (M_PI / 2.0) : 0;
+
+                double theta1 = theta + alpha;
+                double z1 = cos(theta1);
+                if (z1 > 0) {
+                    int px = (int)round(cx + cx * sin(theta1));
+                    if (px >= 0 && px < (int)maxLineWidth) {
+                        if (z1 > zBuffer[px]) {
+                            zBuffer[px] = z1;
+                            rotatedLine[px] = *orig;
+                        }
+                    }
+                }
+
+                double theta2 = theta + M_PI + alpha;
+                double z2 = cos(theta2);
+                if (z2 > 0) {
+                    int px = (int)round(cx + cx * sin(theta2));
+                    if (px >= 0 && px < (int)maxLineWidth) {
+                        if (z2 > zBuffer[px]) {
+                            zBuffer[px] = z2;
+                            rotatedLine[px] = *orig;
+                        }
+                    }
+                }
+            }
+
+            FF_STRBUF_AUTO_DESTROY line = ffStrbufCreateA(256);
+            if (!instance.config.display.pipe && instance.config.display.brightColor) {
+                ffStrbufAppendS(&line, FASTFETCH_TEXT_MODIFIER_BOLT);
+            }
+
+            if ((options->position != FF_LOGO_POSITION_RIGHT) && options->paddingLeft > 0) {
+                ffStrbufAppendNC(&line, options->paddingLeft, ' ');
+            }
+
+            char lastColor[64] = "";
+            for (uint32_t x = 0; x < maxLineWidth; x++) {
+                LogoCell* cell = &rotatedLine[x];
+                if (cell->width > 0) {
+                    if (strcmp(cell->color, lastColor) != 0) {
+                        ffStrbufAppendS(&line, cell->color);
+                        strcpy(lastColor, cell->color);
+                    }
+                    ffStrbufAppendS(&line, cell->ch);
+                }
+            }
+
+            logoLineCachePush(&line, maxLineWidth, cache);
+            free(zBuffer);
+        }
+
+        free(rotatedLine);
+
+        instance.state.logoHeight = options->paddingTop + parsedHeight;
+        if (options->position == FF_LOGO_POSITION_LEFT) {
+            instance.state.logoWidth = maxLineWidth + options->paddingRight;
+        } else {
+            instance.state.logoWidth = 0;
+        }
+
+        uint32_t totalLines = instance.state.logoHeight + 1;
+        while (cache->lines.length < totalLines) {
+            logoLineCachePush(nullptr, 0, cache);
+        }
+
+        cache->nextLine = 0;
+        cache->rightOffset = maxLineWidth + options->paddingRight - 1;
+        return;
+    }
+
     bool keepCarryColor = options->type != FF_LOGO_TYPE_IMAGE_CHAFA;
 
     logoLineCacheClear(cache);

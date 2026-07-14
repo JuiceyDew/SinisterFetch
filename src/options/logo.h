@@ -44,6 +44,7 @@ typedef struct FFOptionsLogo {
     bool printRemaining;
     bool preserveAspectRatio;
     bool recache;
+    bool spin;
 
 #if FF_HAVE_CHAFA
     bool chafaFgOnly;

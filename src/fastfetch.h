@@ -27,6 +27,12 @@ typedef struct FFLogoLineCacheState {
     uint32_t rightOffset;
 } FFLogoLineCacheState;
 
+typedef struct LogoCell {
+    char ch[5];
+    char color[64];
+    uint8_t width;
+} LogoCell;
+
 typedef struct FFstate {
     uint32_t logoWidth;
     uint32_t logoHeight;
@@ -36,6 +42,10 @@ typedef struct FFstate {
     uint32_t dynamicInterval;
     FFPlatform platform;
     FFLogoLineCacheState logoLineCache;
+    LogoCell* logoGrid;
+    uint32_t logoGridWidth;
+    uint32_t logoGridHeight;
+    double logoSpinAngle;
 } FFstate;
 
 typedef struct FFinstance {

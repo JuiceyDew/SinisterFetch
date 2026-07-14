@@ -2,6 +2,12 @@
 #include "common/ffdata.h"
 #include "detection/version/version.h"
 #include "logo/logo.h"
+#ifdef _WIN32
+#include <io.h>
+#define isatty _isatty
+#else
+#include <unistd.h>
+#endif
 #include "common/commandoption.h"
 #include "common/init.h"
 #include "common/io.h"
@@ -775,6 +781,10 @@ static void run(FFdata* data) {
 #endif
 
     while (true) {
+        if (instance.config.logo.spin) {
+            ffLogoUpdateSpin();
+        }
+
         if (useJsonConfig) {
             ffPrintJsonConfig(data, false);
         } else {
@@ -869,6 +879,9 @@ int main(int argc, char** argv) {
     parseArguments(&data, argc, argv, (void*) parseOption);
 
     if (__builtin_expect(data.genConfigPath.length == 0, true)) {
+        if (!instance.state.dynamicInterval && instance.config.logo.spin && !instance.config.display.pipe && isatty(STDOUT_FILENO)) {
+            instance.state.dynamicInterval = 50; // 50ms = 20 FPS
+        }
         run(&data);
     } else {
         writeConfigFile(&data);

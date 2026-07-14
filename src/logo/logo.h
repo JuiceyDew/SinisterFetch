@@ -28,6 +28,7 @@ void ffLogoPrint(void);
 void ffLogoPrintChars(const char* data, bool doColorReplacement);
 void ffLogoPrintLine(void);
 void ffLogoPrintRemaining(void);
+void ffLogoUpdateSpin(void);
 void ffLogoBuiltinPrint(void);
 void ffLogoBuiltinList(void);
 void ffLogoBuiltinListAutocompletion(void);
