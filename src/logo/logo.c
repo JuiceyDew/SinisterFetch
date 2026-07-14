@@ -25,6 +25,130 @@ typedef struct FFLogoCachedLine {
 
 static void logoLineCacheBuild(FFLogoLineCacheState* cache, const char* data, bool doColorReplacement);
 
+static uint8_t getQuadrants(const char* ch) {
+    if (strcmp(ch, "▘") == 0) return 1;
+    if (strcmp(ch, "▝") == 0) return 2;
+    if (strcmp(ch, "▖") == 0) return 4;
+    if (strcmp(ch, "▗") == 0) return 8;
+    if (strcmp(ch, "▀") == 0) return 1 | 2;
+    if (strcmp(ch, "▄") == 0) return 4 | 8;
+    if (strcmp(ch, "▌") == 0) return 1 | 4;
+    if (strcmp(ch, "▐") == 0) return 2 | 8;
+    if (strcmp(ch, "▛") == 0) return 1 | 2 | 4;
+    if (strcmp(ch, "▜") == 0) return 1 | 2 | 8;
+    if (strcmp(ch, "▙") == 0) return 1 | 4 | 8;
+    if (strcmp(ch, "▟") == 0) return 2 | 4 | 8;
+    if (strcmp(ch, "█") == 0) return 1 | 2 | 4 | 8;
+    return 0;
+}
+
+static const char* getCharFromQuadrants(uint8_t q) {
+    switch (q) {
+        case 1: return "▘";
+        case 2: return "▝";
+        case 4: return "▖";
+        case 8: return "▗";
+        case 1|2: return "▀";
+        case 4|8: return "▄";
+        case 1|4: return "▌";
+        case 2|8: return "▐";
+        case 1|2|4: return "▛";
+        case 1|2|8: return "▜";
+        case 1|4|8: return "▙";
+        case 2|4|8: return "▟";
+        case 1|2|4|8: return "█";
+        default: return " ";
+    }
+}
+
+static uint8_t rotateQuadrants(uint8_t q, double alpha) {
+    if (q == 0) return 0;
+    if (q == 15) return 15;
+    
+    double cos_a = cos(alpha);
+    double sin_a = sin(alpha);
+    uint8_t new_q = 0;
+    
+    if (q & 1) {
+        double rx = -0.5 * cos_a - (-0.5) * sin_a;
+        double ry = -0.5 * sin_a + (-0.5) * cos_a;
+        if (rx < 0 && ry < 0) new_q |= 1;
+        else if (rx >= 0 && ry < 0) new_q |= 2;
+        else if (rx < 0 && ry >= 0) new_q |= 4;
+        else new_q |= 8;
+    }
+    if (q & 2) {
+        double rx = 0.5 * cos_a - (-0.5) * sin_a;
+        double ry = 0.5 * sin_a + (-0.5) * cos_a;
+        if (rx < 0 && ry < 0) new_q |= 1;
+        else if (rx >= 0 && ry < 0) new_q |= 2;
+        else if (rx < 0 && ry >= 0) new_q |= 4;
+        else new_q |= 8;
+    }
+    if (q & 4) {
+        double rx = -0.5 * cos_a - 0.5 * sin_a;
+        double ry = -0.5 * sin_a + 0.5 * cos_a;
+        if (rx < 0 && ry < 0) new_q |= 1;
+        else if (rx >= 0 && ry < 0) new_q |= 2;
+        else if (rx < 0 && ry >= 0) new_q |= 4;
+        else new_q |= 8;
+    }
+    if (q & 8) {
+        double rx = 0.5 * cos_a - 0.5 * sin_a;
+        double ry = 0.5 * sin_a + 0.5 * cos_a;
+        if (rx < 0 && ry < 0) new_q |= 1;
+        else if (rx >= 0 && ry < 0) new_q |= 2;
+        else if (rx < 0 && ry >= 0) new_q |= 4;
+        else new_q |= 8;
+    }
+    return new_q;
+}
+
+static const char* rotateChar(const char* ch, double alpha) {
+    uint8_t q = getQuadrants(ch);
+    if (q != 0) {
+        return getCharFromQuadrants(rotateQuadrants(q, alpha));
+    }
+
+    if (strcmp(ch, "-") == 0 || strcmp(ch, "_") == 0 || strcmp(ch, "~") == 0 || strcmp(ch, "─") == 0) {
+        double phi = 0.0 + alpha;
+        phi = fmod(phi, M_PI);
+        if (phi < 0) phi += M_PI;
+        if (phi < M_PI / 8.0 || phi >= 7.0 * M_PI / 8.0) return "─";
+        else if (phi < 3.0 * M_PI / 8.0) return "/";
+        else if (phi < 5.0 * M_PI / 8.0) return "│";
+        else return "\\";
+    }
+    if (strcmp(ch, "|") == 0 || strcmp(ch, "│") == 0 || strcmp(ch, "i") == 0 || strcmp(ch, "I") == 0 || strcmp(ch, "l") == 0) {
+        double phi = M_PI_2 + alpha;
+        phi = fmod(phi, M_PI);
+        if (phi < 0) phi += M_PI;
+        if (phi < M_PI / 8.0 || phi >= 7.0 * M_PI / 8.0) return "─";
+        else if (phi < 3.0 * M_PI / 8.0) return "/";
+        else if (phi < 5.0 * M_PI / 8.0) return "│";
+        else return "\\";
+    }
+    if (strcmp(ch, "/") == 0) {
+        double phi = M_PI / 4.0 + alpha;
+        phi = fmod(phi, M_PI);
+        if (phi < 0) phi += M_PI;
+        if (phi < M_PI / 8.0 || phi >= 7.0 * M_PI / 8.0) return "─";
+        else if (phi < 3.0 * M_PI / 8.0) return "/";
+        else if (phi < 5.0 * M_PI / 8.0) return "│";
+        else return "\\";
+    }
+    if (strcmp(ch, "\\") == 0) {
+        double phi = 3.0 * M_PI / 4.0 + alpha;
+        phi = fmod(phi, M_PI);
+        if (phi < 0) phi += M_PI;
+        if (phi < M_PI / 8.0 || phi >= 7.0 * M_PI / 8.0) return "─";
+        else if (phi < 3.0 * M_PI / 8.0) return "/";
+        else if (phi < 5.0 * M_PI / 8.0) return "│";
+        else return "\\";
+    }
+    return ch;
+}
+
 static void getLogoDimensions(const char* data, bool doColorReplacement, uint32_t* outWidth, uint32_t* outHeight) {
     uint32_t maxW = 0;
     uint32_t h = 0;
@@ -227,60 +351,34 @@ static void logoLineCacheBuild(FFLogoLineCacheState* cache, const char* data, bo
 
     if (instance.state.logoGrid) {
         logoLineCacheClear(cache);
-        uint32_t maxLineWidth = instance.state.logoGridWidth;
-        uint32_t parsedHeight = instance.state.logoGridHeight;
-        LogoCell* rotatedLine = malloc(maxLineWidth * sizeof(LogoCell));
-        double cx = (maxLineWidth - 1) / 2.0;
+        
+        double max_dist = 0;
+        double cx_orig = (instance.state.logoGridWidth - 1) / 2.0;
+        double cy_orig = (instance.state.logoGridHeight - 1) / 2.0;
+        for (uint32_t y = 0; y < instance.state.logoGridHeight; y++) {
+            for (uint32_t x = 0; x < instance.state.logoGridWidth; x++) {
+                LogoCell* cell = &instance.state.logoGrid[y * instance.state.logoGridWidth + x];
+                if (strcmp(cell->ch, " ") != 0 && cell->ch[0] != '\0') {
+                    double dx = x - cx_orig;
+                    double dy = (y - cy_orig) * 2.0;
+                    double dist = sqrt(dx*dx + dy*dy);
+                    if (dist > max_dist) max_dist = dist;
+                }
+            }
+        }
+        
+        uint32_t maxLineWidth = (uint32_t)(2 * ceil(max_dist) + 3);
+        uint32_t parsedHeight = (uint32_t)(2 * ceil(max_dist / 2.0) + 2);
+        
+        double cx_target = (maxLineWidth - 1) / 2.0;
+        double cy_target = (parsedHeight - 1) / 2.0;
         double alpha = instance.state.logoSpinAngle;
-
+        
         for (uint32_t i = 0; i < options->paddingTop; ++i) {
             logoLineCachePush(nullptr, 0, cache);
         }
 
         for (uint32_t y = 0; y < parsedHeight; y++) {
-            for (uint32_t x = 0; x < maxLineWidth; x++) {
-                strcpy(rotatedLine[x].ch, " ");
-                rotatedLine[x].color[0] = '\0';
-                rotatedLine[x].width = 1;
-            }
-
-            double* zBuffer = malloc(maxLineWidth * sizeof(double));
-            for (uint32_t x = 0; x < maxLineWidth; x++) {
-                zBuffer[x] = -1e9;
-            }
-
-            for (uint32_t x = 0; x < maxLineWidth; x++) {
-                LogoCell* orig = &instance.state.logoGrid[y * maxLineWidth + x];
-                if (orig->width == 0) continue;
-
-                double dx = x - cx;
-                double theta = (cx > 0) ? (dx / cx) * (M_PI / 2.0) : 0;
-
-                double theta1 = theta + alpha;
-                double z1 = cos(theta1);
-                if (z1 > 0) {
-                    int px = (int)round(cx + cx * sin(theta1));
-                    if (px >= 0 && px < (int)maxLineWidth) {
-                        if (z1 > zBuffer[px]) {
-                            zBuffer[px] = z1;
-                            rotatedLine[px] = *orig;
-                        }
-                    }
-                }
-
-                double theta2 = theta + M_PI + alpha;
-                double z2 = cos(theta2);
-                if (z2 > 0) {
-                    int px = (int)round(cx + cx * sin(theta2));
-                    if (px >= 0 && px < (int)maxLineWidth) {
-                        if (z2 > zBuffer[px]) {
-                            zBuffer[px] = z2;
-                            rotatedLine[px] = *orig;
-                        }
-                    }
-                }
-            }
-
             FF_STRBUF_AUTO_DESTROY line = ffStrbufCreateA(256);
             if (!instance.config.display.pipe && instance.config.display.brightColor) {
                 ffStrbufAppendS(&line, FASTFETCH_TEXT_MODIFIER_BOLT);
@@ -291,22 +389,56 @@ static void logoLineCacheBuild(FFLogoLineCacheState* cache, const char* data, bo
             }
 
             char lastColor[64] = "";
+            double dy_target = y - cy_target;
+            
             for (uint32_t x = 0; x < maxLineWidth; x++) {
-                LogoCell* cell = &rotatedLine[x];
-                if (cell->width > 0) {
-                    if (strcmp(cell->color, lastColor) != 0) {
-                        ffStrbufAppendS(&line, cell->color);
-                        strcpy(lastColor, cell->color);
+                double dx_target = x - cx_target;
+                
+                double dx_src = dx_target * cos(alpha) + 2.0 * dy_target * sin(alpha);
+                double dy_src = dy_target * cos(alpha) - 0.5 * dx_target * sin(alpha);
+                
+                int sx = (int)round(cx_orig + dx_src);
+                int sy = (int)round(cy_orig + dy_src);
+                
+                LogoCell cell;
+                if (sx >= 0 && sx < (int)instance.state.logoGridWidth && sy >= 0 && sy < (int)instance.state.logoGridHeight) {
+                    cell = instance.state.logoGrid[sy * instance.state.logoGridWidth + sx];
+                } else {
+                    strcpy(cell.ch, " ");
+                    cell.color[0] = '\0';
+                    cell.width = 1;
+                }
+                
+                if (cell.width > 0 && strcmp(cell.ch, " ") != 0 && cell.ch[0] != '\0') {
+                    const char* rot = rotateChar(cell.ch, alpha);
+                    
+                    if (cos(alpha) < 0) {
+                        if (strcmp(rot, "(") == 0) rot = ")";
+                        else if (strcmp(rot, ")") == 0) rot = "(";
+                        else if (strcmp(rot, "[") == 0) rot = "]";
+                        else if (strcmp(rot, "]") == 0) rot = "[";
+                        else if (strcmp(rot, "{") == 0) rot = "}";
+                        else if (strcmp(rot, "}") == 0) rot = "{";
+                        else if (strcmp(rot, "<") == 0) rot = ">";
+                        else if (strcmp(rot, ">") == 0) rot = "<";
                     }
-                    ffStrbufAppendS(&line, cell->ch);
+                    
+                    if (strcmp(cell.color, lastColor) != 0) {
+                        ffStrbufAppendS(&line, cell.color);
+                        strcpy(lastColor, cell.color);
+                    }
+                    ffStrbufAppendS(&line, rot);
+                } else {
+                    if (lastColor[0] != '\0') {
+                        ffStrbufAppendS(&line, FASTFETCH_TEXT_MODIFIER_RESET);
+                        lastColor[0] = '\0';
+                    }
+                    ffStrbufAppendS(&line, " ");
                 }
             }
-
+            
             logoLineCachePush(&line, maxLineWidth, cache);
-            free(zBuffer);
         }
-
-        free(rotatedLine);
 
         instance.state.logoHeight = options->paddingTop + parsedHeight;
         if (options->position == FF_LOGO_POSITION_LEFT) {
